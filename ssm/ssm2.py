@@ -252,7 +252,7 @@ class Ssm2(stomp.ConnectionListener):
         elif self._protocol == "REST":
             self._send_msg_rest(message, msgid)
         else:
-            raise Ssm2Exception('Unsupported protocol defined: %s' % protocol)
+            raise Ssm2Exception('Unsupported protocol defined: %s' % self._protocol)
 
     def _send_msg_rest(self,message,msgid):
         '''
