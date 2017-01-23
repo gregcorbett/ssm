@@ -26,7 +26,7 @@ except ImportError:
 
 from ssm import crypto
 from dirq.QueueSimple import QueueSimple
-from dirq.queue import Queue
+from dirq.queue import Queue, QueueError
 
 import httplib
 import stomp
@@ -43,6 +43,10 @@ import os
 import socket
 import time
 import logging
+
+import datetime
+import json
+import base64
 
 # Set up logging 
 log = logging.getLogger(__name__)
@@ -270,7 +274,15 @@ class Ssm2(stomp.ConnectionListener):
 
         try:
             request = urllib2.Request(self._dest)
-            response = urllib2.urlopen(request)
+
+            # Add self._user, self._pwd to the request
+            base64string = base64.encodestring('%s:%s' % (self._user, self._pwd)).replace('\n', '')
+            request.add_header("Authorization", "Basic %s" % base64string)
+
+            recieved_message = urllib2.urlopen(request).read()
+
+            print recieved_message
+
         except AttributeError, e:  # Most liekly called when self._dest = None
             log.error('AttributeError = ' + str(e.message))
             log.error('Could not fetch from %s', self._dest) 
@@ -285,7 +297,7 @@ class Ssm2(stomp.ConnectionListener):
             log.error('HTTPError = ' + str(e.code))
             log.error('Could not fetch from %s', self._dest)
             raise Ssm2Exception('HTTPError, could not fetch from %s'
-                                % self._dest)
+                                % str(e.code))
         except urllib2.URLError, e:  # Likely thrown if URL doesn't resolve
             log.error('URLError = ' + str(e.reason))
             log.error('Could not fetch from %s', self._dest)
@@ -300,13 +312,38 @@ class Ssm2(stomp.ConnectionListener):
                                 % self._dest)
 
         try:
-            name = self._inq.add({'body': response.read(),
+            xml = self._parse_onedata_json(recieved_message)
+            name = self._inq.add({'body': xml,
                                   'signer': '',
                                   'empaid': ''})
         except QueueError as err:
             log.error("Could not save message.\n%s", err)
 
         log.info('Message saved from %s.', self._dest)
+
+    def _parse_onedata_json(self, message):
+        """Parse OneData space metrics into DataSetUsgae records."""
+        xml = '<?xml version="1.0" encoding="UTF-8"?>'
+
+        message_json_list = json.loads(message)
+        for message_json in message_json_list: 
+            xml = xml + """<ur:UsageRecords xmlns:ur="http://eu-emi.eu/namespaces/2017/01/datasetrecord">
+                <ur:UsageRecord>
+                    <ur:RecordIdentityBlock>
+                        <ur:RecordId>"host.example.org/ur/"""+str(int(time.time()))+"""</ur:RecordId>
+                        <ur:CreateTime>"""+datetime.datetime.now().isoformat()+"""</ur:CreateTime>
+                        <ur:ResourceProvider>"""+message_json['providerId']+"""</ur:ResourceProvider>
+                    </ur:RecordIdentityBlock>
+                    <ur:SubjectIdentityBlock>
+                    </ur:SubjectIdentityBlock>
+                    <ur:DataSetUsageBlock>
+                        <ur:StartTime>"""+str(datetime.datetime.fromtimestamp(message_json['rrd']['meta']['start']))+"""</ur:StartTime>
+                        <ur:EndTime>"""+str(datetime.datetime.fromtimestamp(message_json['rrd']['meta']['end']))+"""</ur:EndTime>
+                    </ur:DataSetUsageBlock>
+                </ur:UsageRecord>
+            </ur:UsageRecords>"""
+        
+        return xml
 
     def send_ping(self):
         '''
