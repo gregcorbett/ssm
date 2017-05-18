@@ -30,9 +30,10 @@ def main():
                   enc_cert=None,
                   verify_enc_cert=False,
                   pidfile=None,
-                  protocol="REST")
+                  protocol="REST",
+                  dest_type="ONEDATA")
 
-    puller._pull_msg_rest()
+    puller.pull_msg_rest()
 
 if __name__ == '__main__':
     main()

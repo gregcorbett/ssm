@@ -69,7 +69,8 @@ class Ssm2(stomp.ConnectionListener):
     
     def __init__(self, hosts_and_ports, qpath, cert, key, dest=None, listen=None, 
                  capath=None, check_crls=False, use_ssl=False, username=None, password=None, 
-                 enc_cert=None, verify_enc_cert=True, pidfile=None, protocol="STOMP"):
+                 enc_cert=None, verify_enc_cert=True, pidfile=None, protocol="STOMP",
+                 dest_type='STOMP-BROKER'):
         '''
         Creates an SSM2 object.  If a listen value is supplied,
         this SSM2 will be a receiver.
@@ -98,6 +99,8 @@ class Ssm2(stomp.ConnectionListener):
 
         # used to differentiate between STOMP and REST methods
         self._protocol = protocol
+        # used to differentiate between AMS and other REST endpoints
+        self._dest_type = dest_type
         
         # create the filesystem queues for accepted and rejected messages
         if dest is not None and listen is None:
@@ -266,12 +269,23 @@ class Ssm2(stomp.ConnectionListener):
             
         self._conn.send(to_send, headers=headers)
 
-    def _pull_msg_rest(self):
+    def pull_msg_rest(self):
+        """Pull a message via REST from self._dest."""
         if self._protocol != "REST":
-            raise Ssm2Exception('Pull via REST called, '
+            # Then this method should not be called,
+            # raise an exception if it is.
+            raise Ssm2Exception('pull_msg_rest called, '
                                 'but protocol not set to REST. '
                                 'Protocol: %s' % self._protocol)
 
+        if self._dest_type == "ONEDATA":
+            self._pull_msg_rest_one_data()
+        else:
+            raise Ssm2Exception('Unsupported Destination Type.'
+                                'Type: %s' % self._dest_type)
+
+    def _pull_msg_rest_one_data(self):
+        """Pull accounting data from One Data."""
         try:
             request = urllib2.Request(self._dest)
 
