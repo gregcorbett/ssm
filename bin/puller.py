@@ -1,39 +1,138 @@
+"""This file will pull DataSet Accounting Record from a REST endpoint."""
+
 from ssm import __version__, set_up_logging, LOG_BREAK
 from ssm.ssm2 import Ssm2, Ssm2Exception
-from ssm.crypto import CryptoException
-from ssm.brokers import StompBrokerGetter, STOMP_SERVICE, STOMP_SSL_SERVICE
 
 import logging.config
-import ldap
 import sys
 import os
 from optparse import OptionParser
 import ConfigParser
 
-import mock
 
 def main():
-    qpath = "/tmp/apel/spool/"
-    source = "https://datahub.plgrid.pl/api/v3/oneprovider/metrics/space/1I8DOQUXXiezOAcTpAewz40HHVNzy-Sr2mlBZZtEmpA?metric=storage_quota&step=1m"
+    """Set up connection, and pull down accounting information."""
+    ver = "SSM %s.%s.%s" % __version__
+    option_parser = OptionParser(description=__doc__, version=ver)
+    option_parser.add_option('-c', '--config', help='location of config file',
+                             default='/etc/apel/receiver.cfg')
+    option_parser.add_option('-l', '--log_config',
+                             help='location of logging config file (optional)',
+                             default='/etc/apel/logging.cfg')
+    option_parser.add_option('-d', '--dn_file',
+                             help='location of the file containing valid DNs',
+                             default='/etc/apel/dns')
 
-    puller = Ssm2(None, # hosts_and_ports,
-                  qpath,
-                  "/etc/httpd/ssl/apache.crt", # cert
-                  "/etc/httpd/ssl/apache.key", # key
-                  dest=source, 
+    (options, _unused_args) = option_parser.parse_args()
+
+    config_parser = ConfigParser.ConfigParser()
+    config_parser.read(options.config)
+
+    # set up logging
+    try:
+        if os.path.exists(options.log_config):
+            logging.config.fileConfig(options.log_config)
+        else:
+            set_up_logging(config_parser.get('logging', 'logfile'),
+                           config_parser.get('logging', 'level'),
+                           config_parser.getboolean('logging', 'console'))
+    except (ConfigParser.Error, ValueError, IOError), err:
+        print 'Error configuring logging: %s' % str(err)
+        print 'SSM will exit.'
+        sys.exit(1)
+
+    logger = logging.getLogger('ssmpull')
+    logger.info(LOG_BREAK)
+    logger.info('Starting pulling SSM version %s.%s.%s.', *__version__)
+
+    try:
+        destination_type = config_parser.get('SSM Type', 'destination type')
+        protocol = config_parser.get('SSM Type', 'protocol')
+
+    except (ConfigParser.NoSectionError, ConfigParser.NoOptionError):
+        logger.debug('No options supplied for destination_type '
+                     'and/or protocol.')
+
+    finally:
+        if protocol is not "REST" and destination_type not in ["ONEDATA"]:
+            logger.error('Dest_Type/Protocol combination not supported:')
+            logger.error('Dest Type: %s, Protocol : %s',
+                      destination_type, protocol)
+            print 'SSM failed to start.  See log file for details.'
+            sys.exit(1)
+
+    logger.info('Setting up SSM with Dest Type: %s, Protocol : %s',
+             destination_type, protocol)
+
+    # Read the destination from the config file
+    try:
+        destination = config_parser.get('messaging', 'destination')
+
+    except (ConfigParser.NoSectionError, ConfigParser.NoOptionError):
+        logger.error('No destination is configured.')
+        logger.error('SSM will exit.')
+        print 'SSM failed to start.  See log file for details.'
+        sys.exit(1)
+
+    # Read the file path the SSM will save messages to
+    try:
+        path = config_parser.get('messaging', 'path')
+
+    except (ConfigParser.NoSectionError, ConfigParser.NoOptionError):
+        logger.error('No message queue is configured.')
+        logger.error('SSM will exit.')
+        print 'SSM failed to start.  See log file for details.'
+        sys.exit(1)
+
+    # Regardless of protocol, the SSM needs a certificate and a key
+    # for HTTPS connections
+    try:
+        cert = config_parser.get('certificates', 'certificate')
+        key = config_parser.get('certificates', 'key')
+
+    except (ConfigParser.NoSectionError, ConfigParser.NoOptionError), error:
+        logger.error('No certificate or key set in conf file')
+        logger.error(error)
+        logger.error('SSM will exit')
+
+        print 'SSM failed to start.  See log file for details.'
+
+        sys.exit(1)
+
+    try:
+        user = config_parser.get('ONEDATA Auth', 'user')
+        pwd = config_parser.get('ONEDATA Auth', 'pass')
+    except (ConfigParser.NoSectionError, ConfigParser.NoOptionError), error:
+        logger.error('No ONEDATA Auth info provided.')
+        logger.error(error)
+        logger.error('SSM will exit')
+
+        print 'SSM failed to start.  See log file for details.'
+
+        sys.exit(1)
+
+    puller = Ssm2(None,  # hosts_and_ports,
+                  path,
+                  cert=cert,
+                  key=key,
+                  dest=destination,
                   listen=True,
-                  capath=None,
-                  check_crls=False,
-                  use_ssl=False,
-                  username="",
-                  password="",
-                  enc_cert=None,
-                  verify_enc_cert=False,
-                  pidfile=None,
-                  protocol="REST",
-                  dest_type="ONEDATA")
+                  username=user,
+                  password=pwd,
+                  protocol=protocol,
+                  dest_type=destination_type)
 
-    puller.pull_msg_rest()
+    try:
+        pass
+        # puller.pull_msg_rest()
+    except:
+        pass
+
+    logger.info('SSM has shut down.')
+    logger.info(LOG_BREAK)
+
+    print 'SSM has shut down.'
+    print LOG_BREAK
 
 if __name__ == '__main__':
     main()
