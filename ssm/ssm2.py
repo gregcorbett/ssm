@@ -28,9 +28,9 @@ from ssm import crypto
 from dirq.QueueSimple import QueueSimple
 from dirq.queue import Queue, QueueError
 
+import urllib2
 import httplib
 import stomp
-import urllib2
 
 # Exception changed name between stomppy versions
 try:
@@ -47,6 +47,8 @@ import logging
 import datetime
 import json
 import base64
+
+import sys
 
 # Set up logging 
 log = logging.getLogger(__name__)
@@ -101,7 +103,14 @@ class Ssm2(stomp.ConnectionListener):
         self._protocol = protocol
         # used to differentiate between AMS and other REST endpoints
         self._dest_type = dest_type
-        
+
+        if self._protocol == "REST" and self._dest_type == "ONEDATA":
+            # Then store the base64 encoded username/password as the password
+            # so it can be accessed throughout the class
+            self._pwd =  base64.encodestring('%s:%s'
+                                             % (self._user,
+                                                self._pwd)).replace('\n', '')
+ 
         # create the filesystem queues for accepted and rejected messages
         if dest is not None and listen is None:
             self._outq = QueueSimple(qpath)
@@ -286,77 +295,180 @@ class Ssm2(stomp.ConnectionListener):
 
     def _pull_msg_rest_one_data(self):
         """Pull accounting data from One Data."""
-        try:
-            request = urllib2.Request(self._dest)
+        # somehow get a list of DOIs
+        list_of_dois = ['10.5072/OXFORDFLOWERDATASET.1']
+        # encode self._user, self._pwd so that it can be sent to server
+        # this should be common for all DOIs we retrieve, so do it once
+        # i.e. not in the loop
+        message_headers = {"Authorization": "Basic %s" % self._pwd}
 
-            # Add self._user, self._pwd to the request
-            base64string = base64.encodestring('%s:%s' % (self._user, self._pwd)).replace('\n', '')
-            request.add_header("Authorization", "Basic %s" % base64string)
+        for doi in list_of_dois:
+            # resolve a DOI to a share url
+            # On the DataCite website it says: DOI should have
+            # at least 1 URL so we should assume a DOI could
+            # possibly resolve to multiple locations
+            for share_url in self._resolve_doi(doi):
+                # extract the ID of the Share from the Share URL
+                [share_id] = share_url.split('/')[4:]
+                # get the Space ID of the Share from hte Share ID
+                space_id = self._onedata_share_to_space(share_id)
+                # get the provider id of the provider that owne the Share
+                provider_id = self._onedata_space_to_provider(space_id)
+                # get the corresponding provider_url from the ID
+                provider_url = self._ondedate_provider_id_to_url(provider_id)
+                # query the Provider Url about the Space ID
+                data = self._onedata_query_provider(provider_url, space_id)
 
-            recieved_message = urllib2.urlopen(request).read()
+                try:
+                    json_data = json.loads(data)
+                    xml = self._parse_onedata_json(json_data, doi)
+                    name = self._inq.add({'body': xml,
+                                          'signer': 'N/A',
+                                          'empaid': 'N/A'})
+                except QueueError as err:
+                    log.error("Could not save message.\n%s", err)
 
-            print recieved_message
+                log.info('Message saved from %s.', self._dest)
 
-        except AttributeError, e:  # Most liekly called when self._dest = None
-            log.error('AttributeError = ' + str(e.message))
-            log.error('Could not fetch from %s', self._dest) 
-            raise Ssm2Exception('AttributeError, could not fetch from %s'
-                                % self._dest)
-        except ValueError, e:  # Most likely thrown if self._dest is not url
-            log.error('ValueError = ' + str(e.message))
-            log.error('Could not fetch from %s', self._dest)
-            raise Ssm2Exception('ValueError, could not fetch from "%s"'
-                                % self._dest)
-        except urllib2.HTTPError, e:  # Likely thrown if respnse is not 200
-            log.error('HTTPError = ' + str(e.code))
-            log.error('Could not fetch from %s', self._dest)
-            raise Ssm2Exception('HTTPError, could not fetch from %s'
-                                % str(e.code))
-        except urllib2.URLError, e:  # Likely thrown if URL doesn't resolve
-            log.error('URLError = ' + str(e.reason))
-            log.error('Could not fetch from %s', self._dest)
-            raise Ssm2Exception('URLError, could not fetch from %s'
-                                % self._dest)
-        except httplib.HTTPException:  # Catches invalid HTTP responses:
-                                       # broken headers; invalid status codes;
-                                       # prematurely broken connections; etc.
-            log.error('HTTPException')
-            log.error('Could not fetch from %s', self._dest)
-            raise Ssm2Exception('HTTPException, could not fetch from %s'
-                                % self._dest)
+    def _onedata_query_provider(self, provider_url, space_id):
+        """Query the given Provider URL about the given SpaceID."""
+        message_header = {"Authorization": "Basic %s" % self._pwd}
 
-        try:
-            xml = self._parse_onedata_json(recieved_message)
-            name = self._inq.add({'body': xml,
-                                  'signer': '',
-                                  'empaid': ''})
-        except QueueError as err:
-            log.error("Could not save message.\n%s", err)
+        request = urllib2.Request(provider_url + '/api/v3/oneprovider/metrics/space/' + space_id + '?metric=block_access', headers=message_header)
 
-        log.info('Message saved from %s.', self._dest)
+        response = urllib2.urlopen(request)
+        return response.read()
 
-    def _parse_onedata_json(self, message):
-        """Parse OneData space metrics into DataSetUsgae records."""
+    def _ondedate_provider_id_to_url(self, provider_id):
+        """Return the Provider URL from the given Provider ID."""
+        message_header = {"Authorization": "Basic %s" % self._pwd}
+
+        result = self._rest_send('/api/v3/onezone/providers/%s' % provider_id, None, message_header)
+        result_json = json.loads(result)
+        return result_json['redirectionPoint']
+
+    def _onedata_space_to_provider(self, space_id):
+        """Return the Provider ID of the given Space ID."""
+        message_header = {"Authorization": "Basic %s" % self._pwd}
+
+        result = self._rest_send('/api/v3/onezone/spaces/%s' % space_id, None, message_header)
+        result_json = json.loads(result)
+        # result_json['providersSupports'] is a dictionary of key/value
+        # pairs of provider IDs and provider provisions, we
+        # just need the IDs (aka the keys)
+        providerIds = result_json['providersSupports'].keys()
+        # Whilst a Space may have many providers, the metrics should
+        # be aggregated in the API throughout all replicas,
+        # so it shouldn't matter which provider you query.
+        # So return the first
+        return providerIds[0]
+
+    def _onedata_share_to_space(self, share_id):
+        """Return the Space ID of the given Share ID."""
+        message_header = {"Authorization": "Basic %s" % self._pwd}
+
+        result = self._rest_send('/api/v3/onezone/shares/%s' % share_id, None, message_header)
+        result_json = json.loads(result)
+        return result_json['spaceId']
+
+    def _resolve_doi(self, doi):
+        """Resolve a given DOI using handle.test.datacite.org."""
+        # can't use _rest_connect here (or even urllib2
+        # as we need to make a HEAD request
+        conn = httplib.HTTPSConnection('handle.test.datacite.org',
+                                       cert_file=self._cert,
+                                       key_file=self._key,
+                                       strict=False)
+
+        conn.request('GET', '/%s' % doi, None, {})
+        response = conn.getresponse()
+        response_headers = response.getheaders()
+        # return a list of 'location' headers
+        location = [header[1] for header in response_headers if header[0] == 'location']
+        return location
+
+    def _rest_send(self, path, data, headers, expected_response_code=200):
+        """
+        Send an HTTPS request to self._dest.
+
+        Will attempt to repeat if expected_response is not returned.
+        """
+        attempt_number = 0
+
+        while attempt_number < 3:
+            try:
+                attempt_number += 1
+
+                request = urllib2.Request("https://" + self._dest + path, headers=headers)
+
+                response = urllib2.urlopen(request)
+
+                if response.getcode() == expected_response_code:
+                    return response.read()
+                else:
+                    log.warning("Could not connect to endpoint, retrying")
+                    time.sleep(attempt_number)
+                    continue
+
+            except socket.gaierror as e:
+                error_string = 'socket.gaierror: %s, %s' % (e.errno,
+                                                            e.strerror)
+
+                log.info(error_string)
+                raise Ssm2Exception(error_string)
+
+        # if here, attempt_number has been exceeded
+        info_string = 'Could not connect to endpoint. Error: %s - %s' % (response.status, response.reason)
+        log.info(info_string)
+        raise Ssm2Exception(info_string)
+
+
+    def _parse_onedata_json(self, json_data, doi):
+        """Parse OneData space metrics into DataSetUsage records."""
+        # Convert the raw json to a XML DSAR
+        # A XML DSAR will start with this
         xml = '<?xml version="1.0" encoding="UTF-8"?>'
+        # Then follow with a list or UsageRecords
+        xml += '<ur:UsageRecords xmlns:ur="http://eu-emi.eu/namespaces/2017/01/datasetrecord">'
 
-        message_json_list = json.loads(message)
-        for message_json in message_json_list: 
-            xml = xml + """<ur:UsageRecords xmlns:ur="http://eu-emi.eu/namespaces/2017/01/datasetrecord">
-                <ur:UsageRecord>
-                    <ur:RecordIdentityBlock>
-                        <ur:RecordId>"host.example.org/ur/"""+str(int(time.time()))+"""</ur:RecordId>
-                        <ur:CreateTime>"""+datetime.datetime.now().isoformat()+"""</ur:CreateTime>
-                        <ur:ResourceProvider>"""+message_json['providerId']+"""</ur:ResourceProvider>
-                    </ur:RecordIdentityBlock>
-                    <ur:SubjectIdentityBlock>
-                    </ur:SubjectIdentityBlock>
-                    <ur:DataSetUsageBlock>
-                        <ur:StartTime>"""+str(datetime.datetime.fromtimestamp(message_json['rrd']['meta']['start']))+"""</ur:StartTime>
-                        <ur:EndTime>"""+str(datetime.datetime.fromtimestamp(message_json['rrd']['meta']['end']))+"""</ur:EndTime>
-                    </ur:DataSetUsageBlock>
-                </ur:UsageRecord>
-            </ur:UsageRecords>"""
-        
+        for json_datum in json_data:
+            # Start an individual Usage Record
+            xml += '<ur:UsageRecord>'
+            # Start the RecordIdentityBlock
+            xml += '<ur:RecordIdentityBlock>'
+            # xml += '<ur:RecordId>...</ur:RecordId>'
+            xml += '<ur:CreateTime>%s</ur:CreateTime>' % int(time.time())
+            xml += '<ur:ResourceProvider>%s</ur:ResourceProvider>' % json_datum['providerId']
+            # End the RecordIdentityBlock
+            xml += '</ur:RecordIdentityBlock>'
+            # Start the SubjectIdentityBlock
+            xml += '<ur:SubjectIdentityBlock>'
+            # xml += '<ur:GlobalUserID>...</ur:GlobalUserID>'
+            # xml += '<ur:GlobalGroupId>...</ur:GlobalGroupId>'
+            # xml += '<ur:GlobalGroupAttribute ur:type ...>...</ur:GlobalGroupAttribute>'
+            # xml += '<ur:ORCID>...</ur:ORCID>'
+            # End the SubjectIdentityBlock
+            xml += '</ur:SubjectIdentityBlock>'
+            # Start the DataSetUsageBlock
+            xml += '<ur:DataSetUsageBlock>'
+            xml += '<ur:Dataset>%s</ur:Dataset>' % doi
+            # xml += '<ur:AccessEvents>...</ur:AccessEvents>'
+            # xml += '<ur:Source>...</ur:Source>'
+            # xml += '<ur:Destination>...</ur:Destination>'
+            xml += '<ur:StartTime>%s</ur:StartTime>' % json_datum['rrd']['meta']['start']
+            # xml += '<ur:Duration>...</ur:Duration>'
+            xml += '<ur:EndTime>%s</ur:EndTime>' % json_datum['rrd']['meta']['end']
+            #xml += '<ur:TransferSize>...</ur:TransferSize>'
+            #xml += '<ur:HostType>...</ur:HostType>'
+            #xml += '<ur:FileCount>...</ur:FileCount>'
+            #xml += '<ur:Status>...</ur:Status>'
+            # End the DataSetUsageBlock
+            xml += '</ur:DataSetUsageBlock>'
+            # End the UsageRecord
+            xml += '</ur:UsageRecord>'
+
+        # End the list of UsageRecords
+        xml += '</ur:UsageRecords>'
         return xml
 
     def send_ping(self):
@@ -577,5 +689,4 @@ class Ssm2(stomp.ConnectionListener):
             except IOError, e:
                 log.warn('Failed to remove pidfile %s: %e', self._pidfile, e)
                 log.warn('SSM may not start again until it is removed.')
-        
-        
+
