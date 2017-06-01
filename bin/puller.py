@@ -100,10 +100,10 @@ def main():
         sys.exit(1)
 
     try:
-        user = config_parser.get('ONEDATA Auth', 'user')
-        pwd = config_parser.get('ONEDATA Auth', 'pass')
+        user = config_parser.get('Auth', 'user')
+        pwd = config_parser.get('Auth', 'pass')
     except (ConfigParser.NoSectionError, ConfigParser.NoOptionError), error:
-        logger.error('No ONEDATA Auth info provided.')
+        logger.error('No Auth info provided.')
         logger.error(error)
         logger.error('SSM will exit')
 
@@ -123,10 +123,14 @@ def main():
                   dest_type=destination_type)
 
     try:
-        pass
-        # puller.pull_msg_rest()
-    except:
-        pass
+        puller.pull_msg_rest()
+    except Ssm2Exception, e:
+        print 'SSM failed to complete successfully. See log file for details.'
+        logger.error('SSM failed to complete successfully: %s', e)
+    except Exception, e:
+        print 'SSM failed to complete successfully. See log file for details.'
+        logger.error('Unexpected exception in SSM: %s', e)
+        logger.error('Exception type: %s', e.__class__)
 
     logger.info('SSM has shut down.')
     logger.info(LOG_BREAK)
