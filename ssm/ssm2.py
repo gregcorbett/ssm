@@ -455,7 +455,7 @@ class Ssm2(stomp.ConnectionListener):
             xml += '</ur:SubjectIdentityBlock>'
             # Start the DataSetUsageBlock
             xml += '<ur:DataSetUsageBlock>'
-            xml += '<ur:Dataset>%s</ur:Dataset>' % doi
+            xml += '<ur:DataSet>%s</ur:DataSet>' % doi
             # xml += '<ur:AccessEvents>...</ur:AccessEvents>'
             # xml += '<ur:Source>...</ur:Source>'
             # xml += '<ur:Destination>...</ur:Destination>'
