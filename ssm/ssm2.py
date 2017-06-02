@@ -432,6 +432,10 @@ class Ssm2(stomp.ConnectionListener):
         xml += '<ur:UsageRecords xmlns:ur="http://eu-emi.eu/namespaces/2017/01/datasetrecord">'
 
         for json_datum in json_data:
+
+            start_time = int(json_datum['rrd']['meta']['start'])
+            end_time = int(json_datum['rrd']['meta']['end'])
+
             # Start an individual Usage Record
             xml += '<ur:UsageRecord>'
             # Start the RecordIdentityBlock
@@ -455,9 +459,9 @@ class Ssm2(stomp.ConnectionListener):
             # xml += '<ur:AccessEvents>...</ur:AccessEvents>'
             # xml += '<ur:Source>...</ur:Source>'
             # xml += '<ur:Destination>...</ur:Destination>'
-            xml += '<ur:StartTime>%s</ur:StartTime>' % json_datum['rrd']['meta']['start']
-            # xml += '<ur:Duration>...</ur:Duration>'
-            xml += '<ur:EndTime>%s</ur:EndTime>' % json_datum['rrd']['meta']['end']
+            xml += '<ur:StartTime>%i</ur:StartTime>' % start_time
+            xml += '<ur:Duration>%i</ur:Duration>' % (end_time - start_time)
+            xml += '<ur:EndTime>%i</ur:EndTime>' % end_time
             #xml += '<ur:TransferSize>...</ur:TransferSize>'
             #xml += '<ur:HostType>...</ur:HostType>'
             #xml += '<ur:FileCount>...</ur:FileCount>'
