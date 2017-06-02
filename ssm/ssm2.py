@@ -310,6 +310,7 @@ class Ssm2(stomp.ConnectionListener):
         message_headers = {"Authorization": "Basic %s" % self._pwd}
 
         for doi in self._dois:
+            log.info('Processing %s', doi)
             # resolve a DOI to a share url
             # On the DataCite website it says: DOI should have
             # at least 1 URL so we should assume a DOI could
@@ -319,10 +320,13 @@ class Ssm2(stomp.ConnectionListener):
                 try: 
                     [share_id] = share_url.split('/')[4:]
                 except ValueError:
-                    log.info('%s did not resolve as expected.', doi)
+                    log.info('DOI did not resolve as expected.')
+                    log.debug('DOI resolved to %s', share_url)
                     log.info('Skipping...')
-                    log.debug('%s resolved to %s', doi, share_url)
                     continue
+
+                # Log what the url resolved to
+                log.debug('DOI resolved to %s', share_url)
                 # get the Space ID of the Share from hte Share ID
                 space_id = self._onedata_share_to_space(share_id)
                 # get the provider id of the provider that owne the Share
@@ -341,7 +345,7 @@ class Ssm2(stomp.ConnectionListener):
                 except QueueError as err:
                     log.error("Could not save message.\n%s", err)
 
-                log.info('Message saved from %s.', self._dest)
+                log.info('Message saved from %s', self._dest)
 
     def _onedata_query_provider(self, provider_url, space_id):
         """Query the given Provider URL about the given SpaceID."""
