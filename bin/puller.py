@@ -9,6 +9,27 @@ import os
 from optparse import OptionParser
 import ConfigParser
 
+def get_dois(doi_file):
+    '''
+    Retrieve a list of DOIs from a file.
+    '''
+    dois = []
+    f = None
+    try:
+        f = open(doi_file, 'r')
+        lines = f.readlines()
+        for line in lines:
+            dois.append(line.strip())
+    finally:
+        if f is not None:
+            f.close()
+    # If no valid DOIs, SSM cannot pull down any usage.
+    if len(dois) == 0:
+        raise Ssm2Exception('No valid DOIs found in %s.  SSM will not start' % doi_file)
+
+    logging.debug('%s DOIs found.', len(dois))
+    return dois
+
 
 def main():
     """Set up connection, and pull down accounting information."""
@@ -19,9 +40,10 @@ def main():
     option_parser.add_option('-l', '--log_config',
                              help='location of logging config file (optional)',
                              default='/etc/apel/logging.cfg')
-    option_parser.add_option('-d', '--dn_file',
-                             help='location of the file containing valid DNs',
-                             default='/etc/apel/dns')
+    option_parser.add_option('-d', '--doi_file',
+                             help='location of the file containing DOIs '
+                                  'to account for.',
+                             default='/etc/apel/dois')
 
     (options, _unused_args) = option_parser.parse_args()
 
@@ -121,6 +143,9 @@ def main():
                   password=pwd,
                   protocol=protocol,
                   dest_type=destination_type)
+
+    dois = get_dois(options.doi_file)
+    puller.set_dois(dois)
 
     try:
         puller.pull_msg_rest()

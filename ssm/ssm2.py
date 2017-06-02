@@ -110,6 +110,11 @@ class Ssm2(stomp.ConnectionListener):
             self._pwd =  base64.encodestring('%s:%s'
                                              % (self._user,
                                                 self._pwd)).replace('\n', '')
+
+        # This variable may later be used to store the dois to do 
+        # DataSet accounting on
+        self._dois = []
+
  
         # create the filesystem queues for accepted and rejected messages
         if dest is not None and listen is None:
@@ -140,6 +145,10 @@ class Ssm2(stomp.ConnectionListener):
         Set the list of DNs which are allowed to sign incoming messages.
         '''
         self._valid_dns = dn_list
+
+    def set_dois(self, dois_list):
+        """Set the list of DOIS which will be used for DataSet Accounting."""
+        self._dois = dois_list
         
     ##########################################################################
     # Methods called by stomppy
@@ -295,14 +304,12 @@ class Ssm2(stomp.ConnectionListener):
 
     def _pull_msg_rest_one_data(self):
         """Pull accounting data from One Data."""
-        # somehow get a list of DOIs
-        list_of_dois = ['10.5072/OXFORDFLOWERDATASET.1']
         # encode self._user, self._pwd so that it can be sent to server
         # this should be common for all DOIs we retrieve, so do it once
         # i.e. not in the loop
         message_headers = {"Authorization": "Basic %s" % self._pwd}
 
-        for doi in list_of_dois:
+        for doi in self._dois:
             # resolve a DOI to a share url
             # On the DataCite website it says: DOI should have
             # at least 1 URL so we should assume a DOI could
