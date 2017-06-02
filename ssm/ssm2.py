@@ -316,7 +316,13 @@ class Ssm2(stomp.ConnectionListener):
             # possibly resolve to multiple locations
             for share_url in self._resolve_doi(doi):
                 # extract the ID of the Share from the Share URL
-                [share_id] = share_url.split('/')[4:]
+                try: 
+                    [share_id] = share_url.split('/')[4:]
+                except ValueError:
+                    log.info('%s did not resolve as expected.', doi)
+                    log.info('Skipping...')
+                    log.debug('%s resolved to %s', doi, share_url)
+                    continue
                 # get the Space ID of the Share from hte Share ID
                 space_id = self._onedata_share_to_space(share_id)
                 # get the provider id of the provider that owne the Share
