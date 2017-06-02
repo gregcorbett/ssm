@@ -463,7 +463,7 @@ class Ssm2(stomp.ConnectionListener):
             xml += '<ur:Duration>%i</ur:Duration>' % (end_time - start_time)
             xml += '<ur:EndTime>%i</ur:EndTime>' % end_time
             #xml += '<ur:TransferSize>...</ur:TransferSize>'
-            #xml += '<ur:HostType>...</ur:HostType>'
+            xml += '<ur:HostType>OneData</ur:HostType>'
             #xml += '<ur:FileCount>...</ur:FileCount>'
             #xml += '<ur:Status>...</ur:Status>'
             # End the DataSetUsageBlock
