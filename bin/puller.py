@@ -121,17 +121,20 @@ def main():
 
         sys.exit(1)
 
-    try:
-        user = config_parser.get('Auth', 'user')
-        pwd = config_parser.get('Auth', 'pass')
-    except (ConfigParser.NoSectionError, ConfigParser.NoOptionError), error:
-        logger.error('No Auth info provided.')
-        logger.error(error)
-        logger.error('SSM will exit')
+    if destination_type == "ONEDATA":
+        try:
+            user = config_parser.get('OneData', 'user')
+            pwd = config_parser.get('OneData', 'pass')
+            destination_version = config_parser.get('OneData', 'version')
+ 
+        except (ConfigParser.NoSectionError, ConfigParser.NoOptionError), error:
+            logger.error('No OneData info provided.')
+            logger.error(error)
+            logger.error('SSM will exit')
 
-        print 'SSM failed to start.  See log file for details.'
+            print 'SSM failed to start.  See log file for details.'
 
-        sys.exit(1)
+            sys.exit(1)
 
     puller = Ssm2(None,  # hosts_and_ports,
                   path,
@@ -142,7 +145,8 @@ def main():
                   username=user,
                   password=pwd,
                   protocol=protocol,
-                  dest_type=destination_type)
+                  dest_type=destination_type,
+                  dest_ver=destination_version)
 
     dois = get_dois(options.doi_file)
     puller.set_dois(dois)

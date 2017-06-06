@@ -72,7 +72,7 @@ class Ssm2(stomp.ConnectionListener):
     def __init__(self, hosts_and_ports, qpath, cert, key, dest=None, listen=None, 
                  capath=None, check_crls=False, use_ssl=False, username=None, password=None, 
                  enc_cert=None, verify_enc_cert=True, pidfile=None, protocol="STOMP",
-                 dest_type='STOMP-BROKER'):
+                 dest_type='STOMP-BROKER', dest_ver=None):
         '''
         Creates an SSM2 object.  If a listen value is supplied,
         this SSM2 will be a receiver.
@@ -103,6 +103,8 @@ class Ssm2(stomp.ConnectionListener):
         self._protocol = protocol
         # used to differentiate between AMS and other REST endpoints
         self._dest_type = dest_type
+        # used to set the version of dest for versioned APIs
+        self._dest_ver = dest_ver
 
         if self._protocol == "REST" and self._dest_type == "ONEDATA":
             # Then store the base64 encoded username/password as the password
@@ -351,7 +353,7 @@ class Ssm2(stomp.ConnectionListener):
         """Query the given Provider URL about the given SpaceID."""
         message_header = {"Authorization": "Basic %s" % self._pwd}
 
-        result = self._rest_send('/api/v3/oneprovider/metrics/space/%s?metric=block_access' % space_id,
+        result = self._rest_send('/api/%s/oneprovider/metrics/space/%s?metric=block_access&step=1d' % (self._dest_ver, space_id),
                                  destination = provider_url,
                                  headers=message_header)
         return result
@@ -360,7 +362,7 @@ class Ssm2(stomp.ConnectionListener):
         """Return the Provider URL from the given Provider ID."""
         message_header = {"Authorization": "Basic %s" % self._pwd}
 
-        result = self._rest_send('/api/v3/onezone/providers/%s' % provider_id, headers=message_header)
+        result = self._rest_send('/api/%s/onezone/providers/%s' % (self._dest_ver, provider_id), headers=message_header)
         result_json = json.loads(result)
         return result_json['redirectionPoint']
 
@@ -368,7 +370,7 @@ class Ssm2(stomp.ConnectionListener):
         """Return the Provider ID of the given Space ID."""
         message_header = {"Authorization": "Basic %s" % self._pwd}
 
-        result = self._rest_send('/api/v3/onezone/spaces/%s' % space_id, headers=message_header)
+        result = self._rest_send('/api/%s/onezone/spaces/%s' % (self._dest_ver, space_id), headers=message_header)
         result_json = json.loads(result)
         # result_json['providersSupports'] is a dictionary of key/value
         # pairs of provider IDs and provider provisions, we
@@ -384,7 +386,7 @@ class Ssm2(stomp.ConnectionListener):
         """Return the Space ID of the given Share ID."""
         message_header = {"Authorization": "Basic %s" % self._pwd}
 
-        result = self._rest_send('/api/v3/onezone/shares/%s' % share_id, headers=message_header)
+        result = self._rest_send('/api/%s/onezone/shares/%s' % (self._dest_ver, share_id), headers=message_header)
         result_json = json.loads(result)
         return result_json['spaceId']
 
@@ -429,12 +431,14 @@ class Ssm2(stomp.ConnectionListener):
                     log.warning("Could not connect to endpoint, retrying")
                     time.sleep(attempt_number)
                     continue
+            except urllib2.HTTPError as err:
+                error_string = '%s%s returned %s.' % (destination, path,
+                                                      err.code)
+                raise Ssm2Exception(error_string)
 
-            except socket.gaierror as e:
-                error_string = 'socket.gaierror: %s, %s' % (e.errno,
-                                                            e.strerror)
-
-                log.info(error_string)
+            except socket.gaierror as err:
+                error_string = 'socket.gaierror: %s, %s' % (err.errno,
+                                                            err.strerror)
                 raise Ssm2Exception(error_string)
 
         # if here, attempt_number has been exceeded
