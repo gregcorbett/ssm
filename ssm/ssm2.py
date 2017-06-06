@@ -342,7 +342,7 @@ class Ssm2(stomp.ConnectionListener):
                     json_data = json.loads(data)
                     xml = self._parse_onedata_json(json_data, doi)
                     name = self._inq.add({'body': xml,
-                                          'signer': 'N/A',
+                                          'signer': '%s\n%s' % (provider_url, provider_id),
                                           'empaid': 'N/A'})
                 except QueueError as err:
                     log.error("Could not save message.\n%s", err)
