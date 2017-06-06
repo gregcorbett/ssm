@@ -351,16 +351,16 @@ class Ssm2(stomp.ConnectionListener):
         """Query the given Provider URL about the given SpaceID."""
         message_header = {"Authorization": "Basic %s" % self._pwd}
 
-        request = urllib2.Request(provider_url + '/api/v3/oneprovider/metrics/space/' + space_id + '?metric=block_access', headers=message_header)
-
-        response = urllib2.urlopen(request)
-        return response.read()
+        result = self._rest_send('/api/v3/oneprovider/metrics/space/%s?metric=block_access' % space_id,
+                                 destination = provider_url,
+                                 headers=message_header)
+        return result
 
     def _ondedate_provider_id_to_url(self, provider_id):
         """Return the Provider URL from the given Provider ID."""
         message_header = {"Authorization": "Basic %s" % self._pwd}
 
-        result = self._rest_send('/api/v3/onezone/providers/%s' % provider_id, None, message_header)
+        result = self._rest_send('/api/v3/onezone/providers/%s' % provider_id, headers=message_header)
         result_json = json.loads(result)
         return result_json['redirectionPoint']
 
@@ -368,7 +368,7 @@ class Ssm2(stomp.ConnectionListener):
         """Return the Provider ID of the given Space ID."""
         message_header = {"Authorization": "Basic %s" % self._pwd}
 
-        result = self._rest_send('/api/v3/onezone/spaces/%s' % space_id, None, message_header)
+        result = self._rest_send('/api/v3/onezone/spaces/%s' % space_id, headers=message_header)
         result_json = json.loads(result)
         # result_json['providersSupports'] is a dictionary of key/value
         # pairs of provider IDs and provider provisions, we
@@ -384,7 +384,7 @@ class Ssm2(stomp.ConnectionListener):
         """Return the Space ID of the given Share ID."""
         message_header = {"Authorization": "Basic %s" % self._pwd}
 
-        result = self._rest_send('/api/v3/onezone/shares/%s' % share_id, None, message_header)
+        result = self._rest_send('/api/v3/onezone/shares/%s' % share_id, headers=message_header)
         result_json = json.loads(result)
         return result_json['spaceId']
 
@@ -404,19 +404,22 @@ class Ssm2(stomp.ConnectionListener):
         location = [header[1] for header in response_headers if header[0] == 'location']
         return location
 
-    def _rest_send(self, path, data, headers, expected_response_code=200):
+    def _rest_send(self, path, destination=None, data=None, headers={}, expected_response_code=200):
         """
-        Send an HTTPS request to self._dest.
+        Send an HTTPS request to destination.
 
+        If destination is None, it will default to self._dest
         Will attempt to repeat if expected_response is not returned.
         """
+        if destination is None:
+            destination = self._dest
         attempt_number = 0
 
         while attempt_number < 3:
             try:
                 attempt_number += 1
 
-                request = urllib2.Request("https://" + self._dest + path, headers=headers)
+                request = urllib2.Request(destination + path, headers=headers)
 
                 response = urllib2.urlopen(request)
 
@@ -472,8 +475,10 @@ class Ssm2(stomp.ConnectionListener):
             xml += '</ur:SubjectIdentityBlock>'
             # Start the DataSetUsageBlock
             xml += '<ur:DataSetUsageBlock>'
-            xml += '<ur:DataSet>%s</ur:DataSet>' % doi
-            # xml += '<ur:AccessEvents>...</ur:AccessEvents>'
+            xml += '<ur:DataSetID>%s</ur:DataSetID>' % doi
+            xml += '<ur:DataSetIDType>%s</ur:DataSetIDType>' % 'DOI'
+            # xml += '<ur:ReadAccessEvents>...</ur:ReadAccessEvents>'
+            # xml += '<ur:WriteAccessEvents>...</ur:WriteAccessEvents>'
             # xml += '<ur:Source>...</ur:Source>'
             # xml += '<ur:Destination>...</ur:Destination>'
             xml += '<ur:StartTime>%i</ur:StartTime>' % start_time
