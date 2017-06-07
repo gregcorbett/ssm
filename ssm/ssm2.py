@@ -394,12 +394,15 @@ class Ssm2(stomp.ConnectionListener):
         """Resolve a given DOI using handle.test.datacite.org."""
         # can't use _rest_connect here (or even urllib2
         # as we need to make a HEAD request
+        # and we can't seem to use httplib or urllib3) throughout due to
+        # SSL handshake errors with TLS1.0+
+        # urllib2 doesn't seem to return the needed headers
         conn = httplib.HTTPSConnection('handle.test.datacite.org',
                                        cert_file=self._cert,
                                        key_file=self._key,
                                        strict=False)
 
-        conn.request('GET', '/%s' % doi, None, {})
+        conn.request('HEAD', '/%s' % doi, None, {})
         response = conn.getresponse()
         response_headers = response.getheaders()
         # return a list of 'location' headers
