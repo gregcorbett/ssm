@@ -464,15 +464,25 @@ class Ssm2(stomp.ConnectionListener):
 
             # extract the daily usage info
             usage_data = json_datum['rrd']['data']
-            read_usage = usage_data[len(usage_data)-1][0]
-            write_usage = usage_data[len(usage_data)-1][1]
+            raw_read_usage = usage_data[len(usage_data)-1][0]
+            raw_write_usage = usage_data[len(usage_data)-1][1]
 
-            if read_usage is None:
-                read_usage = 0
+            if raw_read_usage is None:
+                raw_read_usage = 0
 
-            if write_usage is None:
-                write_usage = 0
-        
+            if raw_write_usage is None:
+                raw_write_usage = 0
+
+            # read and write usage comes as operations per second
+            # to get the number of operations per day,
+            # we need to multiple the number of seconds in a day
+            write_usage = raw_write_usage * 86400
+            read_usage = raw_read_usage * 86400
+            # given the raw usage is a per second average over a day,
+            # these numbers should now be integers, but just to be safe
+            int_write_usage = int(write_usage)
+            int_read_usage = int(read_usage)
+ 
             # Start an individual Usage Record
             xml += '<ur:UsageRecord>'
             # Start the RecordIdentityBlock
@@ -494,8 +504,8 @@ class Ssm2(stomp.ConnectionListener):
             xml += '<ur:DataSetUsageBlock>'
             xml += '<ur:DataSetID>%s</ur:DataSetID>' % doi
             xml += '<ur:DataSetIDType>%s</ur:DataSetIDType>' % 'DOI'
-            xml += '<ur:ReadAccessEvents>%i</ur:ReadAccessEvents>' % read_usage
-            xml += '<ur:WriteAccessEvents>%i</ur:WriteAccessEvents>' % write_usage
+            xml += '<ur:ReadAccessEvents>%i</ur:ReadAccessEvents>' % int_read_usage
+            xml += '<ur:WriteAccessEvents>%i</ur:WriteAccessEvents>' % int_write_usage
             # xml += '<ur:Source>...</ur:Source>'
             # xml += '<ur:Destination>...</ur:Destination>'
             xml += '<ur:StartTime>%i</ur:StartTime>' % (end_time - 86400)
