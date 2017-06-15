@@ -460,9 +460,19 @@ class Ssm2(stomp.ConnectionListener):
 
         for json_datum in json_data:
 
-            start_time = int(json_datum['rrd']['meta']['start'])
             end_time = int(json_datum['rrd']['meta']['end'])
 
+            # extract the daily usage info
+            usage_data = json_datum['rrd']['data']
+            read_usage = usage_data[len(usage_data)-1][0]
+            write_usage = usage_data[len(usage_data)-1][1]
+
+            if read_usage is None:
+                read_usage = 0
+
+            if write_usage is None:
+                write_usage = 0
+        
             # Start an individual Usage Record
             xml += '<ur:UsageRecord>'
             # Start the RecordIdentityBlock
@@ -484,12 +494,12 @@ class Ssm2(stomp.ConnectionListener):
             xml += '<ur:DataSetUsageBlock>'
             xml += '<ur:DataSetID>%s</ur:DataSetID>' % doi
             xml += '<ur:DataSetIDType>%s</ur:DataSetIDType>' % 'DOI'
-            # xml += '<ur:ReadAccessEvents>...</ur:ReadAccessEvents>'
-            # xml += '<ur:WriteAccessEvents>...</ur:WriteAccessEvents>'
+            xml += '<ur:ReadAccessEvents>%i</ur:ReadAccessEvents>' % read_usage
+            xml += '<ur:WriteAccessEvents>%i</ur:WriteAccessEvents>' % write_usage
             # xml += '<ur:Source>...</ur:Source>'
             # xml += '<ur:Destination>...</ur:Destination>'
-            xml += '<ur:StartTime>%i</ur:StartTime>' % start_time
-            xml += '<ur:Duration>%i</ur:Duration>' % (end_time - start_time)
+            xml += '<ur:StartTime>%i</ur:StartTime>' % (end_time - 86400)
+            xml += '<ur:Duration>86400</ur:Duration>'
             xml += '<ur:EndTime>%i</ur:EndTime>' % end_time
             #xml += '<ur:TransferSize>...</ur:TransferSize>'
             xml += '<ur:HostType>OneData</ur:HostType>'
