@@ -490,6 +490,7 @@ class Ssm2(stomp.ConnectionListener):
             xml += '<ur:RecordId>%s-%s-%i</ur:RecordId>' % (self._dest, doi, time.time())
             xml += '<ur:CreateTime>%i</ur:CreateTime>' % (time.time())
             xml += '<ur:ResourceProvider>%s</ur:ResourceProvider>' % json_datum['providerId']
+            xml += '<ur:Infrastructure>%s</ur:Infrastructure>' % self._dest
             # End the RecordIdentityBlock
             xml += '</ur:RecordIdentityBlock>'
             # Start the SubjectIdentityBlock
