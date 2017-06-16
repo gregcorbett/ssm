@@ -464,8 +464,8 @@ class Ssm2(stomp.ConnectionListener):
 
             # extract the daily usage info
             usage_data = json_datum['rrd']['data']
-            raw_read_usage = usage_data[len(usage_data)-1][0]
-            raw_write_usage = usage_data[len(usage_data)-1][1]
+            raw_read_usage = usage_data[len(usage_data)-2][0]
+            raw_write_usage = usage_data[len(usage_data)-2][1]
 
             if raw_read_usage is None:
                 raw_read_usage = 0
@@ -509,9 +509,12 @@ class Ssm2(stomp.ConnectionListener):
             xml += '<ur:WriteAccessEvents>%i</ur:WriteAccessEvents>' % int_write_usage
             # xml += '<ur:Source>...</ur:Source>'
             # xml += '<ur:Destination>...</ur:Destination>'
-            xml += '<ur:StartTime>%i</ur:StartTime>' % (end_time - 86400)
+            # when querying at day granularity, the end time is the
+            # end of today, we want to account for yesterday as that will
+            # be a complete aggregate
+            xml += '<ur:StartTime>%i</ur:StartTime>' % (end_time - 172800)
             xml += '<ur:Duration>86400</ur:Duration>'
-            xml += '<ur:EndTime>%i</ur:EndTime>' % end_time
+            xml += '<ur:EndTime>%i</ur:EndTime>' % (end_time - 86400)
             #xml += '<ur:TransferSize>...</ur:TransferSize>'
             xml += '<ur:HostType>OneData</ur:HostType>'
             #xml += '<ur:FileCount>...</ur:FileCount>'
