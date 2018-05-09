@@ -4,3 +4,7 @@ stomp.py>=3.1.1
 python-daemon<2.2.0
 python-ldap
 dirq
+
+# Dependencies for experimental AMS functionality
+
+argo-ams-library
