@@ -51,9 +51,6 @@ def main():
           download_url='https://github.com/apel/ssm/releases',
           license='Apache License, Version 2.0',
           install_requires=['stomp.py>=3.1.1', 'python-ldap', 'dirq'],
-          extras_require={
-              'python-daemon': ['python-daemon<2.2.0'],
-          },
           packages=find_packages(exclude=['bin', 'test']),
           scripts=['bin/ssmreceive', 'bin/ssmsend'],
           data_files=[(conf_dir, conf_files),
