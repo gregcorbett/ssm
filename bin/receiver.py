@@ -31,7 +31,14 @@ import ldap
 import os
 import sys
 from optparse import OptionParser 
-from daemon import DaemonContext
+
+try:
+    from daemon import DaemonContext
+except ImportError:
+    # A error is logged and the receiver exits later if DaemonContext is
+    # requested but not installed.
+    DaemonContext = None
+
 import ConfigParser
 
 # How often (in seconds) to read the list of valid DNs.
@@ -142,6 +149,13 @@ def main():
         log.info(LOG_BREAK)
         sys.exit(1)
         
+    if DaemonContext is None:
+        log.error("Receiving SSMs must use python-daemon, but the "
+                  "python-daemon module wasn't found.")
+        log.error("System will exit.")
+        log.info(LOG_BREAK)
+        sys.exit(1)
+
     log.info('The SSM will run as a daemon.')
     
     # We need to preserve the file descriptor for any log files.
