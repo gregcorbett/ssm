@@ -26,14 +26,16 @@ http://fedoraproject.org/wiki/EPEL
 The python stomp library (N.B. versions 3.1.1 and above are currently supported)
 * `yum install stomppy`
 
-The python daemon library (N.B. only versions below 2.2.0 are currently supported)
-* `yum install python-daemon`
-
 The python ldap library
 * `yum install python-ldap`
 
 The python dirq library
 * `yum install python-dirq`
+
+The python daemon library (N.B. installing this library is only required when
+using the SSM as a receiver and only versions of the library below 2.2.0 are
+currently supported)
+* `yum install python-daemon`
 
 You need a certificate and key in PEM format accessible to the SSM.
 There are a number of ways to do this.  One is to make a copy of the
