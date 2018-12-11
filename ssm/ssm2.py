@@ -57,10 +57,14 @@ class Ssm2(stomp.ConnectionListener):
     REJECT_SCHEMA = {'body': 'string', 'signer':'string?', 'empaid':'string?', 'error':'string'}
     CONNECTION_TIMEOUT = 10
 
+    # Messaging protocols
+    STOMP_MESSAGING = 'STOMP'
+    AMS_MESSAGING = 'AMS'
+
     def __init__(self, hosts_and_ports, qpath, cert, key, dest=None, listen=None, 
                  capath=None, check_crls=False, use_ssl=False, username=None, password=None, 
                  enc_cert=None, verify_enc_cert=True, pidfile=None,
-                 protocol="STOMP", project=None):
+                 protocol=STOMP_MESSAGING, project=None):
         '''
         Creates an SSM2 object.  If a listen value is supplied,
         this SSM2 will be a receiver.
@@ -93,7 +97,7 @@ class Ssm2(stomp.ConnectionListener):
         # Used when interacting with an Argo Messaging Service
         self._project = project
 
-        if self._protocol == 'AMS':
+        if self._protocol == Ssm2.AMS_MESSAGING:
             self._ams = ArgoMessagingService(endpoint=self._brokers[0],
                                              token=self._pwd,
                                              cert=self._cert,
@@ -329,7 +333,7 @@ class Ssm2(stomp.ConnectionListener):
 
     def pull_msg_rest(self):
         """Pull a message via HTTPS from self._dest."""
-        if self._protocol != 'AMS':
+        if self._protocol != Ssm2.AMS_MESSAGING:
             # Then this method should not be called,
             # raise an exception if it is.
             raise Ssm2Exception('pull_msg_rest called, '
@@ -440,7 +444,7 @@ class Ssm2(stomp.ConnectionListener):
 
             text = self._outq.get(msgid)
 
-            if self._protocol == 'STOMP':
+            if self._protocol == Ssm2.STOMP_MESSAGING:
                 # Then we are sending to a STOMP message broker.
                 self._send_msg(text, msgid)
 
@@ -451,7 +455,7 @@ class Ssm2(stomp.ConnectionListener):
 
                 log_string = "Sent %s" % msgid
 
-            elif self._protocol == 'AMS':
+            elif self._protocol == Ssm2.AMS_MESSAGING:
                 # Then we are sending to an Argo Messaging Service instance.
                 if text is not None:
                     # First we sign the message
@@ -524,7 +528,7 @@ class Ssm2(stomp.ConnectionListener):
         If more than one is in the list self._network_brokers, try to
         connect to each in turn until successful.
         '''
-        if self._protocol == 'AMS':
+        if self._protocol == Ssm2.AMS_MESSAGING:
             log.debug('handle_connect called for AMS, doing nothing.')
             return
 
@@ -547,7 +551,7 @@ class Ssm2(stomp.ConnectionListener):
         When disconnected, attempt to reconnect using the same method as used
         when starting up.
         '''
-        if self._protocol == 'AMS':
+        if self._protocol == Ssm2.AMS_MESSAGING:
             log.debug('handle_disconnect called for AMS, doing nothing.')
             return
 
@@ -578,7 +582,7 @@ class Ssm2(stomp.ConnectionListener):
         If the timeout is reached without receiving confirmation of
         connection, raise an exception.
         '''
-        if self._protocol == 'AMS':
+        if self._protocol == Ssm2.AMS_MESSAGING:
             log.debug('start_connection called for AMS, doing nothing.')
             return
 
@@ -614,7 +618,7 @@ class Ssm2(stomp.ConnectionListener):
         in a separate thread, so it can outlive the main process
         if it is not ended.
         '''
-        if self._protocol == 'AMS':
+        if self._protocol == Ssm2.AMS_MESSAGING:
             log.debug('close_connection called for AMS, doing nothing.')
             return
 
